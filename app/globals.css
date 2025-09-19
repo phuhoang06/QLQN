@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm sm:text-base;
+  }
+  
+  .btn-sm {
+    @apply px-2 py-1 text-xs sm:px-3 sm:py-1 sm:text-sm;
+  }
+  
+  .btn-primary {
+    @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500;
+  }
+  
+  .btn-success {
+    @apply bg-green-600 text-white hover:bg-green-700 focus:ring-green-500;
+  }
+  
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+  }
+  
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6;
+  }
+  
+  .input {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm sm:text-base;
+  }
+  
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  
+  /* Mobile responsive utilities */
+  .mobile-hidden {
+    @apply hidden sm:table-cell;
+  }
+  
+  .mobile-stack {
+    @apply flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3;
+  }
+  
+  .mobile-full {
+    @apply w-full sm:w-auto;
+  }
+}
