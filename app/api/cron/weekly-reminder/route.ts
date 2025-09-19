@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { sendBroadcast, messageTemplates } from '@/lib/meta';
+import { sendMessage, messageTemplates } from '@/lib/meta';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,21 +39,24 @@ export async function GET(request: NextRequest) {
     }
 
     // Group by user to avoid duplicate messages
-    const userContributions = new Map();
+    const userContributions: { [userId: string]: { user: any; contributions: any[] } } = {};
+    
     pendingContributions.forEach(contribution => {
       const userId = contribution.users.id;
-      if (!userContributions.has(userId)) {
-        userContributions.set(userId, {
+      if (!userContributions[userId]) {
+        userContributions[userId] = {
           user: contribution.users,
           contributions: []
-        });
+        };
       }
-      userContributions.get(userId).contributions.push(contribution);
+      userContributions[userId].contributions.push(contribution);
     });
 
     const results = [];
 
-    for (const [userId, data] of userContributions) {
+    // Iterate through userContributions object
+    for (const userId in userContributions) {
+      const data = userContributions[userId];
       const { user, contributions } = data;
       const totalAmount = contributions.reduce((sum, c) => sum + c.amount, 0);
       const dueDate = new Date(contributions[0].due_date).toLocaleDateString('vi-VN');
