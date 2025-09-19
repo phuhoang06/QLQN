@@ -1,106 +1,121 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { NextRequest, NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    // Kiểm tra API key để bảo mật
-    const authHeader = request.headers.get('authorization')
-    const expectedAuth = process.env.CRON_SECRET || 'your-cron-secret'
-    
-    if (authHeader !== `Bearer ${expectedAuth}`) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+    // Verify CRON secret
+    const authHeader = request.headers.get('authorization');
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { week, amount, dueDate } = await request.json()
+    // Get current week info
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
 
-    if (!week || !amount || !dueDate) {
-      return NextResponse.json(
-        { error: 'Week, amount và dueDate là bắt buộc' },
-        { status: 400 }
-      )
-    }
-
-    // Lấy tất cả user active
+    // Get all active users
     const { data: users, error: usersError } = await supabase
       .from('users')
-      .select('id')
-      .eq('status', 'active')
+      .select('*')
+      .eq('status', 'active');
 
     if (usersError) {
-      console.error('Error fetching users:', usersError)
-      return NextResponse.json(
-        { error: 'Có lỗi khi lấy danh sách user' },
-        { status: 500 }
-      )
+      throw usersError;
     }
 
-    if (!users || users.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: 'Không có user nào để tạo đóng góp',
-        created: 0
-      })
+    if (users.length === 0) {
+      return NextResponse.json({ 
+        success: true, 
+        message: 'No active users found' 
+      });
     }
 
-    // Kiểm tra xem đã tạo đóng góp cho tuần này chưa
-    const { data: existingContributions, error: checkError } = await supabase
-      .from('contributions')
-      .select('id')
-      .eq('week', week)
+    // Get contribution schedules
+    const { data: schedules, error: schedulesError } = await supabase
+      .from('contribution_schedules')
+      .select('*')
+      .eq('is_active', true);
 
-    if (checkError) {
-      console.error('Error checking existing contributions:', checkError)
-      return NextResponse.json(
-        { error: 'Có lỗi khi kiểm tra đóng góp hiện tại' },
-        { status: 500 }
-      )
+    if (schedulesError) {
+      throw schedulesError;
     }
 
-    if (existingContributions && existingContributions.length > 0) {
-      return NextResponse.json({
-        success: true,
-        message: `Đã tồn tại đóng góp cho tuần ${week}`,
-        created: 0
-      })
+    if (schedules.length === 0) {
+      return NextResponse.json({ 
+        success: true, 
+        message: 'No active contribution schedules found' 
+      });
     }
 
-    // Tạo đóng góp cho tất cả user
-    const contributions = users.map(user => ({
-      user_id: user.id,
-      week: week,
-      amount: amount,
-      due_date: dueDate,
-      status: 'unpaid'
-    }))
+    const results = [];
 
-    const { error: insertError } = await supabase
-      .from('contributions')
-      .insert(contributions)
+    // Create weekly contributions for each user
+    for (const user of users) {
+      for (const schedule of schedules) {
+        // Check if contribution already exists for this week
+        const { data: existingContribution } = await supabase
+          .from('contributions')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('week', startOfWeek.toISOString().split('T')[0])
+          .eq('schedule_id', schedule.id)
+          .single();
 
-    if (insertError) {
-      console.error('Error creating contributions:', insertError)
-      return NextResponse.json(
-        { error: 'Có lỗi khi tạo đóng góp' },
-        { status: 500 }
-      )
+        if (existingContribution) {
+          continue; // Skip if already exists
+        }
+
+        // Create new contribution
+        const { data: contribution, error: contributionError } = await supabase
+          .from('contributions')
+          .insert({
+            user_id: user.id,
+            week: startOfWeek.toISOString().split('T')[0],
+            amount: schedule.amount,
+            status: 'pending',
+            due_date: endOfWeek.toISOString(),
+            schedule_id: schedule.id,
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (contributionError) {
+          console.error('Error creating contribution:', contributionError);
+          results.push({ 
+            userId: user.id, 
+            userName: user.name,
+            success: false,
+            error: contributionError.message 
+          });
+        } else {
+          results.push({ 
+            userId: user.id, 
+            userName: user.name,
+            contributionId: contribution.id,
+            amount: schedule.amount,
+            success: true 
+          });
+        }
+      }
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `Đã tạo đóng góp tuần ${week} cho ${users.length} thành viên`,
-      created: users.length
-    })
+    return NextResponse.json({ 
+      success: true, 
+      processed: results.length,
+      results 
+    });
 
   } catch (error) {
-    console.error('Error in create-weekly-contributions cron:', error)
-    return NextResponse.json(
-      { error: 'Có lỗi xảy ra trong cron job' },
-      { status: 500 }
-    )
+    console.error('Error creating weekly contributions:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-
+// Add POST method for Vercel CRON
+export async function POST(request: NextRequest) {
+  return GET(request);
+}
