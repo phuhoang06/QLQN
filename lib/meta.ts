@@ -1,4 +1,4 @@
-
+// Meta Messenger API utility
 const META_APP_ID = process.env.META_APP_ID!;
 const META_APP_SECRET = process.env.META_APP_SECRET!;
 const META_PAGE_ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN!;
@@ -38,7 +38,8 @@ export async function sendBroadcast(message: string, recipientIds: string[]) {
       const result = await sendMessage(recipientId, message);
       results.push({ recipientId, success: true, result });
     } catch (error) {
-      results.push({ recipientId, success: false, error: error.message });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      results.push({ recipientId, success: false, error: errorMessage });
     }
   }
   
